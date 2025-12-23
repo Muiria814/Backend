@@ -37,7 +37,7 @@ app.post("/passos", (req, res) => {
     const dogeGanho = Math.floor(user.passos / DOGE_POR_PASSOS);
     if (dogeGanho > 0) {
       user.doge += dogeGanho;
-      user.passos = user.passos % DOGE_POR_PASSOS;
+      user.passos = 0;;
     }
 
     return res.json({
