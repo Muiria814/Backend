@@ -17,7 +17,7 @@ let users = {
   }
 };
 
-const DOGE_POR_PASSOS = 10;
+const DOGE_POR_PASSOS = 1;
 const MIN_SAQUE = 50;
 
 // ====== ATUALIZAR PASSOS E SALDO ======
