@@ -42,7 +42,7 @@ app.post("/passos", (req, res) => {
 
     return res.json({
       success: true,
-      passos: user.passos,
+      passos: passos_atual = 0,
       saldo: user.doge
     });
 
