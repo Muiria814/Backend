@@ -23,20 +23,21 @@ const MIN_SAQUE = 50;
 // ====== ATUALIZAR PASSOS E SALDO ======
 app.post("/passos", (req, res) => {
   try {
-    const { passos } = req.body;
-    const user = users["Professor2024#"]; // utilizador simulado
+    const { novosPassos } = req.body;
+    const user = users["Professor2024#"];
 
-    if (typeof passos !== "number") {
-      return res.json({ success: false, message: "Passos inválidos." });
+    if (typeof novosPassos !== "number" || novosPassos <= 0) {
+      return res.json({ success: false });
     }
 
-    user.passos = passos;
-    
-    // converter passos em DOGE
+    // soma apenas os novos passos
+    user.passos += novosPassos;
+
+    // converte apenas quando atingir 10 passos
     const dogeGanho = Math.floor(user.passos / DOGE_POR_PASSOS);
     if (dogeGanho > 0) {
       user.doge += dogeGanho;
-      user.passos = user.passos % DOGE_POR_PASSOS; // restantes passos
+      user.passos = user.passos % DOGE_POR_PASSOS;
     }
 
     return res.json({
@@ -47,7 +48,7 @@ app.post("/passos", (req, res) => {
 
   } catch (err) {
     console.error("Erro no /passos:", err);
-    res.status(500).json({ success: false, message: "Erro interno." });
+    res.status(500).json({ success: false });
   }
 });
 
