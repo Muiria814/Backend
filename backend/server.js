@@ -4,7 +4,7 @@ import bodyParser from "body-parser";
 import fs from "fs-extra";
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -12,6 +12,12 @@ app.use(bodyParser.json());
 // ====== UTIL ======
 const USERS_FILE = "./users.json";
 const HOUSE_FILE = "./houseWallet.json";
+
+// Garantir que os arquivos existam
+await fs.ensureFile(USERS_FILE);
+await fs.ensureFile(HOUSE_FILE);
+await fs.writeJson(USERS_FILE, await fs.readJson(USERS_FILE).catch(() => []), { spaces: 2 });
+await fs.writeJson(HOUSE_FILE, await fs.readJson(HOUSE_FILE).catch(() => ({ saldo: 1000 })), { spaces: 2 });
 
 // Função para ler usuários
 async function readUsers() {
@@ -57,16 +63,19 @@ app.post("/login", async (req, res) => {
 });
 
 // ====== PASSOS ======
-app.get("/passos", async (req, res) => {
+app.get("/passos/:userId", async (req, res) => {
   const users = await readUsers();
-  const user = users[0]; // para teste, pegando o primeiro usuário
+  const user = users.find(u => u.id === req.params.userId);
+  if (!user) return res.json({ passos: 0 });
   res.json({ passos: user.passos || 0 });
 });
 
-app.post("/passos", async (req, res) => {
+app.post("/passos/:userId", async (req, res) => {
   const { novosPassos } = req.body;
   const users = await readUsers();
-  const user = users[0]; // para teste
+  const user = users.find(u => u.id === req.params.userId);
+  if (!user) return res.json({ success: false, message: "Usuário não encontrado" });
+
   user.passos = (user.passos || 0) + (novosPassos || 0);
   await saveUsers(users);
   res.json({ success: true, passos: user.passos });
@@ -95,16 +104,16 @@ app.post("/convert", async (req, res) => {
 
 // ====== WITHDRAW ======
 app.post("/withdraw", async (req, res) => {
-  const { address, amount } = req.body;
+  const { userId, address, amount } = req.body;
   const house = await readHouse();
   const users = await readUsers();
-  const user = users[0]; // para teste
+  const user = users.find(u => u.id === userId);
+  if (!user) return res.json({ success: false, message: "Usuário não encontrado" });
 
   if (amount < 10) return res.json({ success: false, message: "Mínimo 10 DOGE" });
   if (amount > user.doge) return res.json({ success: false, message: "Saldo insuficiente" });
   if (amount > house.saldo) return res.json({ success: false, message: "HouseWallet sem saldo suficiente" });
 
-  // Deduz saldo
   user.doge -= amount;
   house.saldo -= amount;
 
