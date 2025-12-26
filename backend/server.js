@@ -1,0 +1,118 @@
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import fs from "fs-extra";
+
+const app = express();
+const PORT = 3000;
+
+app.use(cors());
+app.use(bodyParser.json());
+
+// ====== UTIL ======
+const USERS_FILE = "./users.json";
+const HOUSE_FILE = "./houseWallet.json";
+
+// Função para ler usuários
+async function readUsers() {
+  return await fs.readJson(USERS_FILE).catch(() => []);
+}
+
+// Função para salvar usuários
+async function saveUsers(users) {
+  await fs.writeJson(USERS_FILE, users, { spaces: 2 });
+}
+
+// Função para ler housewallet
+async function readHouse() {
+  return await fs.readJson(HOUSE_FILE).catch(() => ({ saldo: 0 }));
+}
+
+// Função para salvar housewallet
+async function saveHouse(wallet) {
+  await fs.writeJson(HOUSE_FILE, wallet, { spaces: 2 });
+}
+
+// ====== REGISTRO ======
+app.post("/register", async (req, res) => {
+  const { nome, email, senha } = req.body;
+  if (!nome || !email || !senha) return res.json({ success: false, message: "Campos obrigatórios" });
+
+  const users = await readUsers();
+  if (users.find(u => u.email === email)) return res.json({ success: false, message: "Email já registrado" });
+
+  const newUser = { id: Date.now().toString(), nome, email, senha, passos: 0, doge: 0, energia: 0, lastConvert: 0 };
+  users.push(newUser);
+  await saveUsers(users);
+  res.json({ success: true, userId: newUser.id });
+});
+
+// ====== LOGIN ======
+app.post("/login", async (req, res) => {
+  const { email, senha } = req.body;
+  const users = await readUsers();
+  const user = users.find(u => u.email === email && u.senha === senha);
+  if (!user) return res.json({ success: false, message: "Email ou senha incorretos" });
+  res.json({ success: true, userId: user.id, nome: user.nome });
+});
+
+// ====== PASSOS ======
+app.get("/passos", async (req, res) => {
+  const users = await readUsers();
+  const user = users[0]; // para teste, pegando o primeiro usuário
+  res.json({ passos: user.passos || 0 });
+});
+
+app.post("/passos", async (req, res) => {
+  const { novosPassos } = req.body;
+  const users = await readUsers();
+  const user = users[0]; // para teste
+  user.passos = (user.passos || 0) + (novosPassos || 0);
+  await saveUsers(users);
+  res.json({ success: true, passos: user.passos });
+});
+
+// ====== CONVERT ======
+app.post("/convert", async (req, res) => {
+  const { userId } = req.body;
+  const users = await readUsers();
+  const user = users.find(u => u.id === userId);
+  if (!user) return res.json({ success: false, message: "Usuário não encontrado" });
+
+  const agora = Date.now();
+  if (agora - (user.lastConvert || 0) < 5000) return res.json({ success: false, message: "Cooldown ativo" });
+
+  const dogeGanho = Math.floor(user.passos / 1000);
+  if (dogeGanho <= 0) return res.json({ success: false, message: "Sem passos suficientes" });
+
+  user.doge += dogeGanho;
+  user.passos = 0;
+  user.lastConvert = agora;
+
+  await saveUsers(users);
+  res.json({ success: true, novoSaldo: user.doge });
+});
+
+// ====== WITHDRAW ======
+app.post("/withdraw", async (req, res) => {
+  const { address, amount } = req.body;
+  const house = await readHouse();
+  const users = await readUsers();
+  const user = users[0]; // para teste
+
+  if (amount < 10) return res.json({ success: false, message: "Mínimo 10 DOGE" });
+  if (amount > user.doge) return res.json({ success: false, message: "Saldo insuficiente" });
+  if (amount > house.saldo) return res.json({ success: false, message: "HouseWallet sem saldo suficiente" });
+
+  // Deduz saldo
+  user.doge -= amount;
+  house.saldo -= amount;
+
+  await saveUsers(users);
+  await saveHouse(house);
+
+  res.json({ success: true, message: `Withdraw de ${amount} DOGE realizado para ${address}` });
+});
+
+// ====== INICIAR SERVIDOR ======
+app.listen(PORT, () => console.log(`Backend rodando em http://localhost:${PORT}`));
