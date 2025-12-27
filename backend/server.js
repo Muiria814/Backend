@@ -129,6 +129,16 @@ app.post("/convert", async (req, res) => {
   res.json({ success: true, novoSaldo: user.doge });
 });
 
+// ====== SALDO DOGE ======
+app.get("/saldo/:userId", async (req, res) => {
+  const users = await readUsers();
+  const user = users.find(u => u.id === req.params.userId);
+
+  if (!user) return res.json({ success: false, saldo: 0 });
+
+  res.json({ success: true, saldo: user.doge || 0 });
+});
+
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
 app.post("/withdraw", async (req, res) => {
   try {
