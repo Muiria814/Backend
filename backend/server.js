@@ -17,11 +17,24 @@ const USERS_FILE = "./users.json";
 const HOUSE_FILE = "./houseWallet.json";
 
 // Garantir que os arquivos existam
-await fs.ensureFile(USERS_FILE);
-await fs.ensureFile(HOUSE_FILE);
-await fs.writeJson(USERS_FILE, await fs.readJson(USERS_FILE).catch(() => []), { spaces: 2 });
-await fs.writeJson(HOUSE_FILE, await fs.readJson(HOUSE_FILE).catch(() => ({ saldo: 1000 })), { spaces: 2 });
-
+(async () => {
+  try {
+    await fs.ensureFile(USERS_FILE);
+    await fs.ensureFile(HOUSE_FILE);
+    await fs.writeJson(
+      USERS_FILE,
+      await fs.readJson(USERS_FILE).catch(() => []),
+      { spaces: 2 }
+    );
+    await fs.writeJson(
+      HOUSE_FILE,
+      await fs.readJson(HOUSE_FILE).catch(() => ({ saldo: 1000 })),
+      { spaces: 2 }
+    );
+  } catch (err) {
+    console.error("Erro ao inicializar arquivos:", err);
+  }
+})();
 // Função para ler usuários
 async function readUsers() {
   return await fs.readJson(USERS_FILE).catch(() => []);
