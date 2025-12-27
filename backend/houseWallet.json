@@ -1,7 +1,6 @@
-address: 'DRgNGmH2udV4CzdVqANYFNDWPLZaXAjJ5N',
-
-  private: '7d2bca25934078519ead7157bfd74c21355c30b08ba1d331e01e25a3638eadf6',
-
-  public: '02fabae501e83211ed9c2ba4945c2d36037562d15fa5ef3571e523440a97c51bfe',
-
-  wif: 'QSowg6fwn2kTEeSPcR2guFZdL71XKLWjzy3k4M398ahdguLJ25DJ'
+{
+  "address": "DRgNGmH2udV4CzdVqANYFNDWPLZaXAjJ5N",
+  "private": "7d2bca25934078519ead7157bfd74c21355c30b08ba1d331e01e25a3638eadf6",
+  "public": "02fabae501e83211ed9c2ba4945c2d36037562d15fa5ef3571e523440a97c51bfe",
+  "saldo": 1000
+}
