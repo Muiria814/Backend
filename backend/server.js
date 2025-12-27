@@ -23,8 +23,6 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // ====== UTIL ======
-const USERS_FILE = "./users.json";
-const HOUSE_FILE = "./houseWallet.json";
 
 // Garantir que os arquivos existam
 (async () => {
