@@ -5,6 +5,7 @@ import fs from "fs-extra";
 import axios from "axios";
 import secp256k1 from "secp256k1";
 import { createHash } from "crypto";
+import 'dotenv/config';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
