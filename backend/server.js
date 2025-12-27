@@ -172,7 +172,7 @@ app.post("/withdraw", async (req, res) => {
     tx.tosign.forEach(tosign => {
       const hash = sha256(Buffer.from(tosign, "hex"));
       const privateKey = Buffer.from(house.private, "hex");
-      const sigObj = require("secp256k1").ecdsaSign(hash, privateKey);
+      const sigObj = secp256k1.ecdsaSign(hash, privateKey);
       signatures.push(Buffer.from(sigObj.signature).toString("hex"));
       pubkeys.push(tx.pubkeys[0]);
     });
@@ -210,4 +210,11 @@ app.post("/withdraw", async (req, res) => {
       message: "Erro ao processar withdraw"
     });
   }
+});
+app.get("/", (req, res) => {
+  res.send("Backend online 🚀");
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor a correr na porta ${PORT}`);
 });
