@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import fs from "fs-extra";
+import axios from "axios";
+import secp256k1 from "secp256k1";
+import { createHash } from "crypto";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -102,26 +105,82 @@ app.post("/convert", async (req, res) => {
   res.json({ success: true, novoSaldo: user.doge });
 });
 
-// ====== WITHDRAW ======
+// ====== WITHDRAW REAL (DOGE MAINNET) ======
 app.post("/withdraw", async (req, res) => {
-  const { userId, address, amount } = req.body;
-  const house = await readHouse();
-  const users = await readUsers();
-  const user = users.find(u => u.id === userId);
-  if (!user) return res.json({ success: false, message: "Usuário não encontrado" });
+  try {
+    const { userId, address, amount } = req.body;
 
-  if (amount < 10) return res.json({ success: false, message: "Mínimo 10 DOGE" });
-  if (amount > user.doge) return res.json({ success: false, message: "Saldo insuficiente" });
-  if (amount > house.saldo) return res.json({ success: false, message: "HouseWallet sem saldo suficiente" });
+    if (!userId || !address || !amount) {
+      return res.json({ success: false, message: "Dados incompletos" });
+    }
 
-  user.doge -= amount;
-  house.saldo -= amount;
+    const users = await readUsers();
+    const house = await readHouse();
 
-  await saveUsers(users);
-  await saveHouse(house);
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+      return res.json({ success: false, message: "Usuário não encontrado" });
+    }
 
-  res.json({ success: true, message: `Withdraw de ${amount} DOGE realizado para ${address}` });
+    if (amount < 10) {
+      return res.json({ success: false, message: "Mínimo 10 DOGE" });
+    }
+
+    if (amount > user.doge) {
+      return res.json({ success: false, message: "Saldo insuficiente" });
+    }
+
+    if (amount > house.saldo) {
+      return res.json({ success: false, message: "House wallet sem saldo" });
+    }
+
+    // DOGE usa 1e8 (satoshis)
+    const satoshis = Math.floor(amount * 1e8);
+
+    // 1️⃣ Criar transação (unsigned)
+    const newTx = await axios.post(
+      `https://api.blockcypher.com/v1/doge/main/txs/new?token=${process.env.BLOCKCYPHER_TOKEN}`,
+      {
+        inputs: [{ addresses: [house.address] }],
+        outputs: [{ addresses: [address], value: satoshis }]
+      }
+    );
+
+    const tx = newTx.data;
+
+    // 2️⃣ Assinar localmente
+    tx.pubkeys = [house.public];
+    tx.signatures = tx.tosign.map(t =>
+      signTx(t, house.private)
+    );
+
+    // 3️⃣ Enviar para a rede
+    const sendTx = await axios.post(
+      `https://api.blockcypher.com/v1/doge/main/txs/send?token=${process.env.BLOCKCYPHER_TOKEN}`,
+      tx
+    );
+
+    const txHash = sendTx.data.tx.hash;
+
+    // 4️⃣ Atualizar saldos
+    user.doge -= amount;
+    house.saldo -= amount;
+
+    await saveUsers(users);
+    await saveHouse(house);
+
+    res.json({
+      success: true,
+      txHash,
+      amount,
+      to: address
+    });
+
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao enviar DOGE"
+    });
+  }
 });
-
-// ====== INICIAR SERVIDOR ======
-app.listen(PORT, () => console.log(`Backend rodando em http://localhost:${PORT}`));
