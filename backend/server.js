@@ -7,6 +7,15 @@ import secp256k1 from "secp256k1";
 import { createHash } from "crypto";
 import 'dotenv/config';
 
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const USERS_FILE = path.join(__dirname, "users.json");
+const HOUSE_FILE = path.join(__dirname, "houseWallet.json");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -22,20 +31,20 @@ const HOUSE_FILE = "./houseWallet.json";
   try {
     await fs.ensureFile(USERS_FILE);
     await fs.ensureFile(HOUSE_FILE);
-    await fs.writeJson(
-      USERS_FILE,
-      await fs.readJson(USERS_FILE).catch(() => []),
-      { spaces: 2 }
-    );
-    await fs.writeJson(
-      HOUSE_FILE,
-      await fs.readJson(HOUSE_FILE).catch(() => ({ saldo: 1000 })),
-      { spaces: 2 }
-    );
+
+    // USERS
+    try { await fs.readJson(USERS_FILE); }
+    catch { await fs.writeJson(USERS_FILE, [], { spaces: 2 }); }
+
+    // HOUSE
+    try { await fs.readJson(HOUSE_FILE); }
+    catch { await fs.writeJson(HOUSE_FILE, { saldo: 1000 }, { spaces: 2 }); }
+
   } catch (err) {
     console.error("Erro ao inicializar arquivos:", err);
   }
 })();
+
 // Função para ler usuários
 async function readUsers() {
   return await fs.readJson(USERS_FILE).catch(() => []);
