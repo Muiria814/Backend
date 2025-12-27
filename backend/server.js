@@ -41,6 +41,9 @@ async function readHouse() {
 async function saveHouse(wallet) {
   await fs.writeJson(HOUSE_FILE, wallet, { spaces: 2 });
 }
+function sha256(buffer) {
+  return createHash("sha256").update(buffer).digest();
+  }
 
 // ====== REGISTRO ======
 app.post("/register", async (req, res) => {
@@ -126,61 +129,71 @@ app.post("/withdraw", async (req, res) => {
       return res.json({ success: false, message: "Mínimo 10 DOGE" });
     }
 
-    if (amount > user.doge) {
+    if (user.doge < amount) {
       return res.json({ success: false, message: "Saldo insuficiente" });
     }
 
-    if (amount > house.saldo) {
-      return res.json({ success: false, message: "House wallet sem saldo" });
+    if (house.saldo < amount) {
+      return res.json({ success: false, message: "House sem saldo" });
     }
 
-    // DOGE usa 1e8 (satoshis)
-    const satoshis = Math.floor(amount * 1e8);
-
-    // 1️⃣ Criar transação (unsigned)
+    // 1️⃣ Criar TX (esqueleto)
     const newTx = await axios.post(
-      `https://api.blockcypher.com/v1/doge/main/txs/new?token=${process.env.BLOCKCYPHER_TOKEN}`,
+      "https://api.blockcypher.com/v1/doge/main/txs/new",
       {
         inputs: [{ addresses: [house.address] }],
-        outputs: [{ addresses: [address], value: satoshis }]
+        outputs: [{ addresses: [address], value: Math.floor(amount * 1e8) }]
+      },
+      {
+        params: { token: process.env.BLOCKCYPHER_TOKEN }
       }
     );
 
     const tx = newTx.data;
 
-    // 2️⃣ Assinar localmente
-    tx.pubkeys = [house.public];
-    tx.signatures = tx.tosign.map(t =>
-      signTx(t, house.private)
-    );
+    // 2️⃣ Assinar inputs
+    const signatures = [];
+    const pubkeys = [];
 
-    // 3️⃣ Enviar para a rede
+    tx.tosign.forEach(tosign => {
+      const hash = sha256(Buffer.from(tosign, "hex"));
+      const privateKey = Buffer.from(house.private, "hex");
+      const sigObj = require("secp256k1").ecdsaSign(hash, privateKey);
+      signatures.push(Buffer.from(sigObj.signature).toString("hex"));
+      pubkeys.push(tx.pubkeys[0]);
+    });
+
+    tx.signatures = signatures;
+    tx.pubkeys = pubkeys;
+
+    // 3️⃣ Enviar TX para a rede
     const sendTx = await axios.post(
-      `https://api.blockcypher.com/v1/doge/main/txs/send?token=${process.env.BLOCKCYPHER_TOKEN}`,
-      tx
+      "https://api.blockcypher.com/v1/doge/main/txs/send",
+      tx,
+      {
+        params: { token: process.env.BLOCKCYPHER_TOKEN }
+      }
     );
 
     const txHash = sendTx.data.tx.hash;
 
-    // 4️⃣ Atualizar saldos
+    // 4️⃣ Atualizar saldos APENAS após sucesso
     user.doge -= amount;
     house.saldo -= amount;
 
     await saveUsers(users);
     await saveHouse(house);
 
-    res.json({
+    return res.json({
       success: true,
-      txHash,
-      amount,
-      to: address
+      txHash
     });
 
   } catch (err) {
     console.error(err.response?.data || err.message);
-    res.status(500).json({
+    return res.json({
       success: false,
-      message: "Erro ao enviar DOGE"
+      message: "Erro ao processar withdraw"
     });
   }
 });
