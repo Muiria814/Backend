@@ -156,6 +156,7 @@ app.post("/login", async (req, res) => {
       passos: user.passos,
       doge: user.doge,
       energia: user.energia ?? 100
+     }
     });
 
   } catch (err) {
