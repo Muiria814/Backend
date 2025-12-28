@@ -148,10 +148,14 @@ app.post("/login", async (req, res) => {
       return res.json({ success: false, message: "Email ou senha incorretos" });
     }
 
-    return res.json({
-      success: true,
-      userId: user.id,
-      nome: user.nome
+    res.json({
+    success: true,
+    user: {
+      id: user.id,
+      nome: user.nome,
+      passos: user.passos,
+      doge: user.doge,
+      energia: user.energia ?? 100
     });
 
   } catch (err) {
@@ -197,34 +201,85 @@ app.post("/passos/:userId", async (req, res) => {
 // ====== CONVERT ======
 app.post("/convert", async (req, res) => {
   const { userId } = req.body;
-  const users = await readUsers();
-  const user = users.find(u => u.id === userId);
-  if (!user) return res.json({ success: false, message: "Usuário não encontrado" });
+
+  // Buscar o user no Supabase
+  const { data: users, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", userId)
+    .limit(1);
+
+  if (error || !users || users.length === 0) {
+    return res.json({ success: false, message: "Usuário não encontrado" });
+  }
+
+  const user = users[0];
 
   const agora = Date.now();
-  if (agora - (user.lastConvert || 0) < 5000) return res.json({ success: false, message: "Cooldown ativo" });
 
-  const dogeGanho = Math.floor(user.passos / 1000);
-  if (dogeGanho <= 0) return res.json({ success: false, message: "Sem passos suficientes" });
+  if (agora - (user.lastConvert || 0) < 5000) {
+    return res.json({ success: false, message: "Cooldown ativo" });
+  }
 
-  user.doge += dogeGanho;
-  user.passos = 0;
-  user.lastConvert = agora;
+  const dogeGanho = Math.floor((user.passos || 0) / 1000);
 
-  await saveUsers(users);
-  res.json({ success: true, novoSaldo: user.doge });
+  if (dogeGanho <= 0) {
+    return res.json({ success: false, message: "Sem passos suficientes" });
+  }
+
+  const novoSaldo = (user.doge || 0) + dogeGanho;
+
+  // Atualizar no Supabase
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({
+      doge: novoSaldo,
+      passos: 0,
+      lastConvert: agora
+    })
+    .eq("id", userId);
+
+  if (updateError) {
+    return res.json({ success: false, message: "Erro ao atualizar saldo" });
+  }
+
+  res.json({ success: true, novoSaldo });
 });
-
 // ====== SALDO DOGE ======
 app.get("/saldo/:userId", async (req, res) => {
-  const users = await readUsers();
-  const user = users.find(u => u.id === req.params.userId);
+  const userId = req.params.userId;
 
-  if (!user) return res.json({ success: false, saldo: 0 });
+  const { data: users, error } = await supabase
+    .from("users")
+    .select("doge")
+    .eq("id", userId)
+    .limit(1);
 
-  res.json({ success: true, saldo: user.doge || 0 });
+  if (error || !users || users.length === 0) {
+    return res.json({ success: false, saldo: 0 });
+  }
+
+  res.json({
+    success: true,
+    saldo: users[0].doge || 0
+  });
 });
 
+// ====== ENERGIA (ATUALIZAR) ======
+app.post("/energia", async (req, res) => {
+  const { userId, energia } = req.body;
+
+  const { error } = await supabase
+    .from("users")
+    .update({ energia })
+    .eq("id", userId);
+
+  if (error) {
+    return res.json({ success: false });
+  }
+
+  res.json({ success: true });
+});
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
 app.post("/withdraw", async (req, res) => {
   try {
