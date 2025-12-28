@@ -13,7 +13,7 @@
     "fs-extra": "^11.1.1",
     "axios": "^1.7.0",
     "secp256k1": "^4.0.2",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
   "@supabase/supabase-js": "^2.45.0"
     
   },
