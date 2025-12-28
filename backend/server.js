@@ -7,8 +7,15 @@ import secp256k1 from "secp256k1";
 import { createHash } from "crypto";
 import 'dotenv/config';
 
+import { createClient } from "@supabase/supabase-js";
+
 import path from "path";
 import { fileURLToPath } from "url";
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,18 +73,58 @@ function sha256(buffer) {
   return createHash("sha256").update(buffer).digest();
   }
 
-// ====== REGISTRO ======
+// ====== REGISTRO (SUPABASE) ======
 app.post("/register", async (req, res) => {
   const { nome, email, senha } = req.body;
-  if (!nome || !email || !senha) return res.json({ success: false, message: "Campos obrigatórios" });
 
-  const users = await readUsers();
-  if (users.find(u => u.email === email)) return res.json({ success: false, message: "Email já registrado" });
+  if (!nome || !email || !senha) {
+    return res.json({ success: false, message: "Campos obrigatórios" });
+  }
 
-  const newUser = { id: Date.now().toString(), nome, email, senha, passos: 0, doge: 0, energia: 0, lastConvert: 0 };
-  users.push(newUser);
-  await saveUsers(users);
-  res.json({ success: true, userId: newUser.id });
+  try {
+    // Verificar se já existe email
+    const { data: existente, error: erroBusca } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (erroBusca) {
+      console.error("Erro Supabase:", erroBusca);
+      return res.json({ success: false, message: "Erro ao verificar email" });
+    }
+
+    if (existente) {
+      return res.json({ success: false, message: "Email já registrado" });
+    }
+
+    // Criar novo utilizador
+    const newUser = {
+      id: Date.now().toString(),
+      nome,
+      email,
+      senha,
+      passos: 0,
+      doge: 0,
+      energia: 0,
+      lastConvert: 0
+    };
+
+    const { error } = await supabase
+      .from("users")
+      .insert(newUser);
+
+    if (error) {
+      console.error("Erro inserir:", error);
+      return res.json({ success: false, message: "Erro ao registrar" });
+    }
+
+    return res.json({ success: true, userId: newUser.id });
+
+  } catch (err) {
+    console.error(err);
+    return res.json({ success: false, message: "Erro inesperado" });
+  }
 });
 
 // ====== LOGIN ======
