@@ -106,7 +106,7 @@ app.post("/register", async (req, res) => {
       senha,
       passos: 0,
       doge: 0,
-      energia: 0,
+      energia: 100,
       lastConvert: 0
     };
 
@@ -263,6 +263,26 @@ app.get("/saldo/:userId", async (req, res) => {
   res.json({
     success: true,
     saldo: users[0].doge || 0
+  });
+});
+
+// ====== ENERGIA (BUSCAR) ======
+app.get("/energia/:userId", async (req, res) => {
+  const userId = req.params.userId;
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("energia")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return res.json({ success: false, energia: 100 });
+  }
+
+  res.json({
+    success: true,
+    energia: data.energia ?? 100
   });
 });
 
