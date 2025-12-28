@@ -127,32 +127,71 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// ====== LOGIN ======
+// ====== LOGIN (SUPABASE) ======
 app.post("/login", async (req, res) => {
   const { email, senha } = req.body;
-  const users = await readUsers();
-  const user = users.find(u => u.email === email && u.senha === senha);
-  if (!user) return res.json({ success: false, message: "Email ou senha incorretos" });
-  res.json({ success: true, userId: user.id, nome: user.nome });
+
+  try {
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .eq("senha", senha)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro Supabase login:", error);
+      return res.json({ success: false, message: "Erro no login" });
+    }
+
+    if (!user) {
+      return res.json({ success: false, message: "Email ou senha incorretos" });
+    }
+
+    return res.json({
+      success: true,
+      userId: user.id,
+      nome: user.nome
+    });
+
+  } catch (err) {
+    console.error("Erro inesperado login:", err);
+    return res.json({ success: false, message: "Erro inesperado no login" });
+  }
 });
 
 // ====== PASSOS ======
 app.get("/passos/:userId", async (req, res) => {
-  const users = await readUsers();
-  const user = users.find(u => u.id === req.params.userId);
-  if (!user) return res.json({ passos: 0 });
-  res.json({ passos: user.passos || 0 });
+  const { data, error } = await supabase
+    .from("users")
+    .select("passos")
+    .eq("id", req.params.userId)
+    .maybeSingle();
+
+  if (error || !data) return res.json({ passos: 0 });
+
+  res.json({ passos: data.passos || 0 });
 });
 
 app.post("/passos/:userId", async (req, res) => {
   const { novosPassos } = req.body;
-  const users = await readUsers();
-  const user = users.find(u => u.id === req.params.userId);
-  if (!user) return res.json({ success: false, message: "Usuário não encontrado" });
 
-  user.passos = (user.passos || 0) + (novosPassos || 0);
-  await saveUsers(users);
-  res.json({ success: true, passos: user.passos });
+  const { data: user } = await supabase
+    .from("users")
+    .select("passos")
+    .eq("id", req.params.userId)
+    .maybeSingle();
+
+  if (!user) return res.json({ success: false });
+
+  const total = (user.passos || 0) + (novosPassos || 0);
+
+  await supabase
+    .from("users")
+    .update({ passos: total })
+    .eq("id", req.params.userId);
+
+  res.json({ success: true, passos: total });
 });
 
 // ====== CONVERT ======
