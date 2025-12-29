@@ -322,10 +322,13 @@ app.post("/withdraw", async (req, res) => {
     }
 
     // 2️⃣ Buscar HOUSE (única linha)
-    const { data: house, error: houseError } = await supabase
-      .from("house")
-      .select("*")
-      .single();
+    const { data } = await supabase
+  .from("users")
+  .select("*")
+  .eq("role", "house")
+  .limit(1)
+
+const house = data[0]
 
     if (houseError || !house) {
       return res.json({ success: false, message: "House não encontrada" });
@@ -381,7 +384,7 @@ app.post("/withdraw", async (req, res) => {
 
     // 6️⃣ Atualizar saldos no Supabase
     const novoSaldoUser = user.doge - amount;
-    const novoSaldoHouse = house.saldo - amount;
+    const novoSaldoHouse = house.doge - amount;
 
     await supabase.from("users")
       .update({ doge: novoSaldoUser })
