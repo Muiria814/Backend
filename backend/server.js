@@ -302,13 +302,6 @@ app.post("/energia", async (req, res) => {
   res.json({ success: true });
 });
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
-import { createClient } from "@supabase/supabase-js";
-import axios from "axios";
-import * as secp256k1 from "secp256k1";
-import sha256 from "sha256";
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-
 app.post("/withdraw", async (req, res) => {
   try {
     const { userId, address, amount } = req.body;
