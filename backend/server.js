@@ -302,6 +302,13 @@ app.post("/energia", async (req, res) => {
   res.json({ success: true });
 });
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
+import { createClient } from "@supabase/supabase-js";
+import axios from "axios";
+import * as secp256k1 from "secp256k1";
+import sha256 from "sha256";
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
 app.post("/withdraw", async (req, res) => {
   try {
     const { userId, address, amount } = req.body;
@@ -310,41 +317,52 @@ app.post("/withdraw", async (req, res) => {
       return res.json({ success: false, message: "Dados incompletos" });
     }
 
-    const users = await readUsers();
-    const house = await readHouse();
+    // 1️⃣ Buscar USER no Supabase
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", userId)
+      .single();
 
-    const user = users.find(u => u.id === userId);
-    if (!user) {
+    if (userError || !user) {
       return res.json({ success: false, message: "Usuário não encontrado" });
+    }
+
+    // 2️⃣ Buscar HOUSE (única linha)
+    const { data: house, error: houseError } = await supabase
+      .from("house")
+      .select("*")
+      .single();
+
+    if (houseError || !house) {
+      return res.json({ success: false, message: "House não encontrada" });
     }
 
     if (amount < 10) {
       return res.json({ success: false, message: "Mínimo 10 DOGE" });
     }
 
-    if (user.doge < amount) {
+    if ((user.doge || 0) < amount) {
       return res.json({ success: false, message: "Saldo insuficiente" });
     }
 
-    if (house.saldo < amount) {
+    if ((house.saldo || 0) < amount) {
       return res.json({ success: false, message: "House sem saldo" });
     }
 
-    // 1️⃣ Criar TX (esqueleto)
+    // 3️⃣ Criar transação no BlockCypher
     const newTx = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/new",
       {
         inputs: [{ addresses: [house.address] }],
         outputs: [{ addresses: [address], value: Math.floor(amount * 1e8) }]
       },
-      {
-        params: { token: process.env.BLOCKCYPHER_TOKEN }
-      }
+      { params: { token: process.env.BLOCKCYPHER_TOKEN } }
     );
 
     const tx = newTx.data;
 
-    // 2️⃣ Assinar inputs
+    // 4️⃣ Assinar
     const signatures = [];
     const pubkeys = [];
 
@@ -359,27 +377,30 @@ app.post("/withdraw", async (req, res) => {
     tx.signatures = signatures;
     tx.pubkeys = pubkeys;
 
-    // 3️⃣ Enviar TX para a rede
+    // 5️⃣ Enviar TX
     const sendTx = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/send",
       tx,
-      {
-        params: { token: process.env.BLOCKCYPHER_TOKEN }
-      }
+      { params: { token: process.env.BLOCKCYPHER_TOKEN } }
     );
 
     const txHash = sendTx.data.tx.hash;
 
-    // 4️⃣ Atualizar saldos APENAS após sucesso
-    user.doge -= amount;
-    house.saldo -= amount;
+    // 6️⃣ Atualizar saldos no Supabase
+    const novoSaldoUser = user.doge - amount;
+    const novoSaldoHouse = house.saldo - amount;
 
-    await saveUsers(users);
-    await saveHouse(house);
+    await supabase.from("users")
+      .update({ doge: novoSaldoUser })
+      .eq("id", userId);
+
+    await supabase.from("house")
+      .update({ saldo: novoSaldoHouse });
 
     return res.json({
       success: true,
-      txHash
+      txHash,
+      saldo: novoSaldoUser
     });
 
   } catch (err) {
