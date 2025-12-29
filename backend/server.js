@@ -409,3 +409,11 @@ app.post("/withdraw", async (req, res) => {
     });
   }
 });
+app.get("/", (req, res) => {
+  res.send("Backend online 🚀");
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor a correr na porta ${PORT}`);
+});
+
