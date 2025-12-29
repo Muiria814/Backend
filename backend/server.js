@@ -308,85 +308,104 @@ const TOKEN = process.env.BLOCKCYPHER_TOKEN;
 
 app.post("/withdraw", async (req, res) => {
   try {
-    const { userId, address, amount } = req.body;
 
-    if (!userId || !address || !amount) {
-      return res.json({ success: false, message: "Dados incompletos" });
+    // ===== VALIDAR ENV =====
+    if (!HOUSE_ADDRESS || !HOUSE_PRIVATE || !TOKEN) {
+      return res.json({ success:false, message:"Variáveis .env em falta" });
     }
 
-    // Buscar user
-    const { data: user, error: userError } = await supabase
+    if (HOUSE_PRIVATE.length !== 64) {
+      return res.json({ success:false, message:"HOUSE_PRIVATE tem de ser chave HEX (64 chars)" });
+    }
+
+    const { userId, address, amount } = req.body;
+
+    if (!userId || !address || !amount)
+      return res.json({ success:false, message:"Dados incompletos" });
+
+    if (amount < 10)
+      return res.json({ success:false, message:"Mínimo 10 DOGE" });
+
+    // ===== USER =====
+    const { data: user } = await supabase
       .from("users")
       .select("*")
       .eq("id", userId)
       .single();
 
-    // Buscar house (apenas saldo)
+    if (!user)
+      return res.json({ success:false, message:"Usuário não encontrado" });
+
+    // ===== HOUSE =====
     const { data: house } = await supabase
       .from("users")
       .select("*")
-      .eq("role", "house")
+      .eq("role","house")
       .single();
 
-    if (!user || userError) return res.json({ success:false, message:"Usuário não encontrado" });
-    if (!house) return res.json({ success:false, message:"House não encontrada" });
+    if (!house)
+      return res.json({ success:false, message:"House não encontrada" });
 
-    if (amount < 10) return res.json({ success:false, message:"Mínimo 10 DOGE" });
-    if ((user.doge||0) < amount) return res.json({ success:false, message:"Saldo insuficiente" });
-    if ((house.saldo||0) < amount) return res.json({ success:false, message:"House sem saldo" });
+    if ((user.doge||0) < amount)
+      return res.json({ success:false, message:"Saldo insuficiente" });
 
-    // Criar TX
+    if ((house.saldo||0) < amount)
+      return res.json({ success:false, message:"House sem saldo" });
+
+    // ===== CRIAR TX =====
     const newtx = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/new",
       {
-        inputs: [{ addresses: [HOUSE_ADDRESS] }],
-        outputs: [
-          { addresses: [address], value: Math.floor(amount * 1e8) },
-          { addresses: [HOUSE_ADDRESS], value: 1 } // troco (será ajustado pelo BlockCypher)
-        ]
+        inputs:[{ addresses:[HOUSE_ADDRESS] }],
+        outputs:[{ addresses:[address], value:Math.floor(amount*1e8)}]
       },
-      { params: { token: TOKEN } }
+      { params:{ token:TOKEN } }
     );
 
     let tx = newtx.data;
 
-    // Assinar
-    const signatures = [];
-    const pubkeys = [];
+    // ===== CRIAR PUBKEY A PARTIR DA PRIVATE =====
+    const pk = Buffer.from(HOUSE_PRIVATE,"hex");
+    const pubkey = Buffer.from(secp256k1.publicKeyCreate(pk)).toString("hex");
 
-    tx.tosign.forEach(tosign => {
-      const hash = sha256(Buffer.from(tosign, "hex"));
-      const pk = Buffer.from(HOUSE_PRIVATE, "hex");
-      const sigObj = secp256k1.ecdsaSign(hash, pk);
-      signatures.push(Buffer.from(sigObj.signature).toString("hex"));
-      pubkeys.push(tx.pubkeys[0]);
+    // ===== ASSINAR =====
+    tx.signatures = [];
+    tx.pubkeys = [];
+
+    tx.tosign.forEach(ts=>{
+      const hash = createHash("sha256").update(Buffer.from(ts,"hex")).digest();
+      const sig = secp256k1.ecdsaSign(hash, pk);
+      tx.signatures.push(Buffer.from(sig.signature).toString("hex"));
+      tx.pubkeys.push(pubkey);
     });
 
-    tx.signatures = signatures;
-    tx.pubkeys = pubkeys;
-
-    // Enviar TX
+    // ===== ENVIAR =====
     const sent = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/send",
       tx,
-      { params: { token: TOKEN } }
+      { params:{ token:TOKEN } }
     );
 
     const txHash = sent.data.tx.hash;
 
-    // Atualizar saldos no Supabase
+    // ===== ATUALIZAR SALDOS =====
     await supabase.from("users")
-      .update({ doge: (user.doge||0) - amount })
+      .update({ doge:(user.doge||0)-amount })
       .eq("id", userId);
 
     await supabase.from("users")
-      .update({ saldo: (house.saldo||0) - amount })
-      .eq("role", "house");
+      .update({ saldo:(house.saldo||0)-amount })
+      .eq("role","house");
 
     return res.json({ success:true, txHash });
 
-  } catch (err) {
-    console.log(err.response?.data || err.message);
-    return res.json({ success:false, message:"Erro ao processar withdraw" });
+  } catch(err) {
+
+    console.error("WITHDRAW ERROR:", err?.response?.data || err?.message || err);
+
+    return res.json({
+      success:false,
+      message:"Erro ao processar withdraw"
+    });
   }
 });
