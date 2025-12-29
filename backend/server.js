@@ -322,17 +322,17 @@ app.post("/withdraw", async (req, res) => {
     }
 
     // 2️⃣ Buscar HOUSE (única linha)
-    const { data } = await supabase
+    const { data: house, error: houseError } = await supabase
   .from("users")
   .select("*")
   .eq("role", "house")
-  .limit(1)
+  .single();
+
+if (houseError || !house) {
+  return res.json({ success: false, message: "House não encontrada" });
+}
 
 const house = data[0]
-
-    if (houseError || !house) {
-      return res.json({ success: false, message: "House não encontrada" });
-    }
 
     if (amount < 10) {
       return res.json({ success: false, message: "Mínimo 10 DOGE" });
