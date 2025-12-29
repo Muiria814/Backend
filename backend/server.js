@@ -302,6 +302,10 @@ app.post("/energia", async (req, res) => {
   res.json({ success: true });
 });
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
+const HOUSE_ADDRESS = process.env.HOUSE_ADDRESS;
+const HOUSE_PRIVATE = process.env.HOUSE_PRIVATE;
+const TOKEN = process.env.BLOCKCYPHER_TOKEN;
+
 app.post("/withdraw", async (req, res) => {
   try {
     const { userId, address, amount } = req.body;
@@ -310,60 +314,50 @@ app.post("/withdraw", async (req, res) => {
       return res.json({ success: false, message: "Dados incompletos" });
     }
 
-    // 1️⃣ Buscar USER no Supabase
+    // Buscar user
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
       .eq("id", userId)
       .single();
 
-    if (userError || !user) {
-      return res.json({ success: false, message: "Usuário não encontrado" });
-    }
+    // Buscar house (apenas saldo)
+    const { data: house } = await supabase
+      .from("users")
+      .select("*")
+      .eq("role", "house")
+      .single();
 
-    // 2️⃣ Buscar HOUSE (única linha)
-    const { data: house, error: houseError } = await supabase
-  .from("users")
-  .select("*")
-  .eq("role", "house")
-  .single();
+    if (!user || userError) return res.json({ success:false, message:"Usuário não encontrado" });
+    if (!house) return res.json({ success:false, message:"House não encontrada" });
 
-if (houseError || !house) {
-  return res.json({ success: false, message: "House não encontrada" });
-}
+    if (amount < 10) return res.json({ success:false, message:"Mínimo 10 DOGE" });
+    if ((user.doge||0) < amount) return res.json({ success:false, message:"Saldo insuficiente" });
+    if ((house.saldo||0) < amount) return res.json({ success:false, message:"House sem saldo" });
 
-    if (amount < 10) {
-      return res.json({ success: false, message: "Mínimo 10 DOGE" });
-    }
-
-    if ((user.doge || 0) < amount) {
-      return res.json({ success: false, message: "Saldo insuficiente" });
-    }
-
-    if ((house.saldo || 0) < amount) {
-      return res.json({ success: false, message: "House sem saldo" });
-    }
-
-    // 3️⃣ Criar transação no BlockCypher
-    const newTx = await axios.post(
+    // Criar TX
+    const newtx = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/new",
       {
-        inputs: [{ addresses: [house.address] }],
-        outputs: [{ addresses: [address], value: Math.floor(amount * 1e8) }]
+        inputs: [{ addresses: [HOUSE_ADDRESS] }],
+        outputs: [
+          { addresses: [address], value: Math.floor(amount * 1e8) },
+          { addresses: [HOUSE_ADDRESS], value: 1 } // troco (será ajustado pelo BlockCypher)
+        ]
       },
-      { params: { token: process.env.BLOCKCYPHER_TOKEN } }
+      { params: { token: TOKEN } }
     );
 
-    const tx = newTx.data;
+    let tx = newtx.data;
 
-    // 4️⃣ Assinar
+    // Assinar
     const signatures = [];
     const pubkeys = [];
 
     tx.tosign.forEach(tosign => {
       const hash = sha256(Buffer.from(tosign, "hex"));
-      const privateKey = Buffer.from(house.private, "hex");
-      const sigObj = secp256k1.ecdsaSign(hash, privateKey);
+      const pk = Buffer.from(HOUSE_PRIVATE, "hex");
+      const sigObj = secp256k1.ecdsaSign(hash, pk);
       signatures.push(Buffer.from(sigObj.signature).toString("hex"));
       pubkeys.push(tx.pubkeys[0]);
     });
@@ -371,44 +365,28 @@ if (houseError || !house) {
     tx.signatures = signatures;
     tx.pubkeys = pubkeys;
 
-    // 5️⃣ Enviar TX
-    const sendTx = await axios.post(
+    // Enviar TX
+    const sent = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/send",
       tx,
-      { params: { token: process.env.BLOCKCYPHER_TOKEN } }
+      { params: { token: TOKEN } }
     );
 
-    const txHash = sendTx.data.tx.hash;
+    const txHash = sent.data.tx.hash;
 
-    // 6️⃣ Atualizar saldos no Supabase
-    const novoSaldoUser = user.doge - amount;
-    const novoSaldoHouse = house.doge - amount;
-
+    // Atualizar saldos no Supabase
     await supabase.from("users")
-      .update({ doge: novoSaldoUser })
+      .update({ doge: (user.doge||0) - amount })
       .eq("id", userId);
 
-    await supabase.from("house")
-      .update({ saldo: novoSaldoHouse });
+    await supabase.from("users")
+      .update({ saldo: (house.saldo||0) - amount })
+      .eq("role", "house");
 
-    return res.json({
-      success: true,
-      txHash,
-      saldo: novoSaldoUser
-    });
+    return res.json({ success:true, txHash });
 
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    return res.json({
-      success: false,
-      message: "Erro ao processar withdraw"
-    });
+    console.log(err.response?.data || err.message);
+    return res.json({ success:false, message:"Erro ao processar withdraw" });
   }
-});
-app.get("/", (req, res) => {
-  res.send("Backend online 🚀");
-});
-
-app.listen(PORT, () => {
-  console.log(`Servidor a correr na porta ${PORT}`);
 });
