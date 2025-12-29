@@ -332,8 +332,6 @@ if (houseError || !house) {
   return res.json({ success: false, message: "House não encontrada" });
 }
 
-const house = data[0]
-
     if (amount < 10) {
       return res.json({ success: false, message: "Mínimo 10 DOGE" });
     }
