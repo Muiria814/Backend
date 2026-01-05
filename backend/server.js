@@ -323,7 +323,7 @@ app.post("/withdraw", async (req, res) => {
     if (!userId || !address || !amount)
       return res.json({ success:false, message:"Dados incompletos" });
 
-    if (amount < 10)
+    if (amount < 1)
       return res.json({ success:false, message:"Mínimo 10 DOGE" });
 
     // ===== USER =====
