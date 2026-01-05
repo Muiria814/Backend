@@ -328,8 +328,8 @@ app.post("/withdraw", async (req, res) => {
     if (!userId || !address || !amount)
       return res.json({ success:false, message:"Dados incompletos" });
 
-    if (amount < 1)
-      return res.json({ success:false, message:"Mínimo 10 DOGE" });
+    if (amount < 0.001)
+      return res.json({ success:false, message:"Mínimo 0.001 DOGE" });
 
     // ===== USER =====
     const { data: user } = await supabase
