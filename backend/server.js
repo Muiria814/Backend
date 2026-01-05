@@ -302,6 +302,11 @@ app.post("/energia", async (req, res) => {
   res.json({ success: true });
 });
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
+app.post("/withdraw", async (req, res) => {
+
+  console.log("📩 /withdraw foi chamado!", req.body);
+
+  try {
 const HOUSE_ADDRESS = process.env.HOUSE_ADDRESS;
 const HOUSE_PRIVATE = process.env.HOUSE_PRIVATE;
 const TOKEN = process.env.BLOCKCYPHER_TOKEN;
