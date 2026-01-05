@@ -307,6 +307,7 @@ app.post("/withdraw", async (req, res) => {
 
   res.json({ success: true });
 });
+
   try {
 const HOUSE_ADDRESS = process.env.HOUSE_ADDRESS;
 const HOUSE_PRIVATE = process.env.HOUSE_PRIVATE;
