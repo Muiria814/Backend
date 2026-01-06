@@ -368,34 +368,34 @@ app.post("/withdraw", async (req, res) => {
     let tx = newtx.data;
     
     console.log("NEW TX:", newtx.data);
-
-    // ===== CRIAR PUBKEY A PARTIR DA PRIVATE =====
-const pk = Buffer.from(HOUSE_PRIVATE,"hex");
-const pubkey = Buffer.from(secp256k1.publicKeyCreate(pk)).toString("hex");
-    // ===== ASSINAR CORRETAMENTE =====
+    
+// ===== ASSINAR CORRETAMENTE =====
 tx.signatures = [];
 tx.pubkeys = [];
 
-// pubkey compressa (33 bytes)
+// criar pk a partir da private key (uma vez)
+const pk = Buffer.from(HOUSE_PRIVATE, "hex");
+
+// criar pubkey compressa (33 bytes)
 const pubkey = Buffer.from(
   secp256k1.publicKeyCreate(pk, true)
 ).toString("hex");
 
 tx.tosign.forEach(ts => {
 
-  // NÃO re-hash — ts já é hash pronto
+  // ts já é hash pronto — não fazer SHA256 de novo
   const msg = Buffer.from(ts, "hex");
 
   // assinatura raw r||s
   const sigObj = secp256k1.ecdsaSign(msg, pk);
 
-  // converter para DER (formato que a BlockCypher aceita)
+  // converter para DER
   const der = secp256k1.signatureExport(sigObj.signature);
 
   tx.signatures.push(Buffer.from(der).toString("hex"));
   tx.pubkeys.push(pubkey);
 });
-
+    
     // ===== ENVIAR =====
     const sent = await axios.post(
       "https://api.blockcypher.com/v1/doge/main/txs/send",
