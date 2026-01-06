@@ -417,6 +417,8 @@ if (!txHash) {
 
     console.error("WITHDRAW ERROR:", err?.response?.data || err?.message || err);
 
+    console.log("🔥 DEBUG ERROR:", err?.response?.data, err?.message);
+
     return res.json({
       success:false,
       message:"Erro ao processar withdraw"
