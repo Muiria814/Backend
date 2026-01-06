@@ -303,10 +303,6 @@ app.post("/energia", async (req, res) => {
 });
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
 app.post("/withdraw", async (req, res) => {
-  console.log("📩 /withdraw foi chamado!", req.body);
-
-  res.json({ success: true });
-});
 try {
   
 const HOUSE_ADDRESS = process.env.HOUSE_ADDRESS;
