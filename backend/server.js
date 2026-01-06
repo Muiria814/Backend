@@ -370,19 +370,33 @@ app.post("/withdraw", async (req, res) => {
     console.log("NEW TX:", newtx.data);
 
     // ===== CRIAR PUBKEY A PARTIR DA PRIVATE =====
-    const pk = Buffer.from(HOUSE_PRIVATE,"hex");
-    const pubkey = Buffer.from(secp256k1.publicKeyCreate(pk)).toString("hex");
+const pk = Buffer.from(HOUSE_PRIVATE,"hex");
+const pubkey = Buffer.from(secp256k1.publicKeyCreate(pk)).toString("hex");
+    // ===== ASSINAR CORRETAMENTE =====
+tx.signatures = [];
+tx.pubkeys = [];
 
-    // ===== ASSINAR =====
-    tx.signatures = [];
-    tx.pubkeys = [];
+const pk = Buffer.from(HOUSE_PRIVATE, "hex");
 
-    tx.tosign.forEach(ts=>{
-      const hash = createHash("sha256").update(Buffer.from(ts,"hex")).digest();
-      const sig = secp256k1.ecdsaSign(hash, pk);
-      tx.signatures.push(Buffer.from(sig.signature).toString("hex"));
-      tx.pubkeys.push(pubkey);
-    });
+// pubkey compressa (33 bytes)
+const pubkey = Buffer.from(
+  secp256k1.publicKeyCreate(pk, true)
+).toString("hex");
+
+tx.tosign.forEach(ts => {
+
+  // NÃO re-hash — ts já é hash pronto
+  const msg = Buffer.from(ts, "hex");
+
+  // assinatura raw r||s
+  const sigObj = secp256k1.ecdsaSign(msg, pk);
+
+  // converter para DER (formato que a BlockCypher aceita)
+  const der = secp256k1.signatureExport(sigObj.signature);
+
+  tx.signatures.push(Buffer.from(der).toString("hex"));
+  tx.pubkeys.push(pubkey);
+});
 
     // ===== ENVIAR =====
     const sent = await axios.post(
