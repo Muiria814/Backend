@@ -27,7 +27,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
 // ====== UTIL ======
 
@@ -302,6 +302,7 @@ app.post("/energia", async (req, res) => {
   res.json({ success: true });
 });
 // ====== WITHDRAW REAL (DOGE MAINNET) ======
+console.log("WITHDRAW BODY:", req.body);
 const HOUSE_ADDRESS = process.env.HOUSE_ADDRESS;
 const HOUSE_PRIVATE = process.env.HOUSE_PRIVATE;
 const TOKEN = process.env.BLOCKCYPHER_TOKEN;
@@ -363,6 +364,8 @@ app.post("/withdraw", async (req, res) => {
     );
 
     let tx = newtx.data;
+    
+    console.log("NEW TX:", newtx.data);
 
     // ===== CRIAR PUBKEY A PARTIR DA PRIVATE =====
     const pk = Buffer.from(HOUSE_PRIVATE,"hex");
@@ -386,8 +389,17 @@ app.post("/withdraw", async (req, res) => {
       { params:{ token:TOKEN } }
     );
 
-    const txHash = sent.data.tx.hash;
+    const txHash = sent?.data?.tx?.hash;
 
+if (!txHash) {
+  console.log("BLOCKCYPHER ERROR:", sent.data);
+  return res.json({
+    success:false,
+    message:"Falha ao enviar transação"
+  });
+}
+    console.log("SEND RESULT:", sent.data);
+    
     // ===== ATUALIZAR SALDOS =====
     await supabase.from("users")
       .update({ doge:(user.doge||0)-amount })
