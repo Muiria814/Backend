@@ -376,8 +376,6 @@ const pubkey = Buffer.from(secp256k1.publicKeyCreate(pk)).toString("hex");
 tx.signatures = [];
 tx.pubkeys = [];
 
-const pk = Buffer.from(HOUSE_PRIVATE, "hex");
-
 // pubkey compressa (33 bytes)
 const pubkey = Buffer.from(
   secp256k1.publicKeyCreate(pk, true)
